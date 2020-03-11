@@ -37,35 +37,43 @@ class Ansatz:
             # Dimension Check
             if not isinstance(x[0],(list,np.ndarray,tuple)):
                 if len(x)%3 != 0:
-                    raise ValueError("Ansatz dimension doesn't match\n 3 parameters are required for each qubit.")
+                    raise ValueError("Ansatz dimension doesn't match\n3 parameters are required for each qubit.")
                 else:
                     self.para = np.split(x,len(x)//3)
             if len(self.para) != self.N:
-                raise ValueError("Ansatz dimension doesn't match\n % parameters are required." % 3*self.N)
+                raise ValueError("Ansatz dimension doesn't match\n%s parameters are required." % 3*self.N)
+        else:
+            raise ValueError("Unkown ansatz %s" % ansatz)
 
     def set_circuit(self):
         self.qc = QubitCircuit(self.N)
-        i = 0
-        for angles in self.para:
-            self.qc.add_gate("RZ", i, None, angles[0])
-            self.qc.add_gate("RX", i, None, angles[1])
-            self.qc.add_gate("RZ", i, None, angles[2])
-            i+=1
-        for j in range(self.N-1):
-            self.qc.add_gate("CNOT",j,j+1, None)
-        return self.qc
+        if self.name == "regular":
+            i = 0
+            for angles in self.para:
+                self.qc.add_gate("RZ", i, None, angles[0])
+                self.qc.add_gate("RX", i, None, angles[1])
+                self.qc.add_gate("RZ", i, None, angles[2])
+                i+=1
+            for j in range(self.N-1):
+                self.qc.add_gate("CNOT",j,j+1, None)
+            return self.qc
+        else:
+            raise ValueError("Unkown ansatz: %s" % ansatz)
 
     def set_inv_circuit(self):  # It's necessary since the reverse_circuit in qutip didn't take the inverse of gates.
         self.inv_qc = QubitCircuit(self.N)
-        for j in reversed(range(self.N-1)): # CNOT in inverses order
-            self.inv_qc.add_gate("CNOT",j,j+1, None)
-        i = 0
-        for angles in reversed(self.para):
-            self.inv_qc.add_gate("RZ", i, None, -angles[2])
-            self.inv_qc.add_gate("RZ", i, None, -angles[1])
-            self.inv_qc.add_gate("RX", i, None, -angles[0])
-            i+=1
-        return self.inv_qc
+        if self.name == "regular":
+            for j in reversed(range(self.N-1)): # CNOT in inverses order
+                self.inv_qc.add_gate("CNOT",j,j+1, None)
+            i = 0
+            for angles in reversed(self.para):
+                self.inv_qc.add_gate("RZ", i, None, -angles[2])
+                self.inv_qc.add_gate("RZ", i, None, -angles[1])
+                self.inv_qc.add_gate("RX", i, None, -angles[0])
+                i+=1
+            return self.inv_qc
+        else:
+            raise ValueError("Unkown ansatz: %s" % ansatz)
 
 class vcirc:
     """
