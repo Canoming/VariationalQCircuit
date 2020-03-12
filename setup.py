@@ -9,6 +9,7 @@ setup(name='variational_circuit',
       license='MIT',
       packages=['variational_circuit'],
       install_requires=[
+          'Cython',
           'qutip',
       ],
       zip_safe=False)
