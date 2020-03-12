@@ -1,5 +1,5 @@
-from varicirc import *
-from measure import *
+from variational_circuit.varicirc import *
+from variational_circuit.measure import *
 from scipy.optimize import minimize
 from time import time
 
@@ -57,5 +57,7 @@ x0 = np.zeros(N*3*L) # init parameters
 vc.update_ansatzes(x0)
 
 print("qdr_cost(x0,ref_sys=[2,3]):",qdr_cost(Input,r_state,vc.qc,ref_sys=[2,3]))
+
+#------------------------
 
 print('the end')
