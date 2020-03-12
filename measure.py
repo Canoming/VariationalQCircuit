@@ -5,7 +5,7 @@ from qutip.metrics import fidelity
 
 def sep_purity(state,parti=None):
     """Purity of the disentangled system"""
-    if parti = None
+    if parti == None:
         N = len(state.dims[0])
         parti = [np.arange(N//2),np.arange(N//2,N)]
         print("Partition is",parti)
@@ -43,6 +43,7 @@ def ptest(statein,circuit,parti=None):
 
 def fid_ref(state,r_state,ref_sys=None):
     """The fidelity between subsystem and the reference state"""
+    state_test = state
     if ref_sys != None:
         state_test = state.ptrace(ref_sys)
     fid = fidelity(state_test,r_state)
@@ -67,7 +68,10 @@ def qdr_cost(statein,r_state,circuit,ref_sys=None):
     # Dimension Check
     if (statein.dims[0] != [2]*N) and (statein.dims[1] != [2]*N):
         raise ValueError("Invalid input state, must be state on %s qubits system." % N)
-    n = len(ref_sys)
+    if ref_sys != None:
+        n = len(ref_sys)
+    else:
+        n = N
     if (r_state.dims[0] != [2]*n) and (r_state.dims[1] != [2]*n):
         raise ValueError("Invalid reference state, must be state on %s qubits system." % n)
     prop = gate_sequence_product(circuit.propagators())
