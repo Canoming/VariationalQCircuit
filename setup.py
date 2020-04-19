@@ -9,6 +9,9 @@ setup(name='variational_circuit',
       license='MIT',
       packages=['variational_circuit'],
       install_requires=[
+          'numpy',
+          'scipy',
           'qutip',
+          'bitstring',
       ],
       zip_safe=False)

@@ -13,8 +13,6 @@ def inner(a,b):
     for bit in c:
         temp ^ bit
     return BitVec(bool=temp)
-        
-
 
 if __name__ == "__main__":
     a = BitVec('0x00')

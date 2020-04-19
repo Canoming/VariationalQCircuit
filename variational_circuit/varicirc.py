@@ -1,49 +1,69 @@
 import numpy as np
+
 from qutip.qip.circuit import *
 
 class Ansatz:
     """
-    Generate the ansatz
+    The class of ansatzs
     
     Parameters
     ----------
         x: list
-            The parameters of the Ansatz
+            The parameters of the ansatz.
+        N: int
+            Number of qubits.
+        ansatz: string
+            The name of ansatz.
+        arg_value:
+            An position holder for special ansatzes.
     Attributes
     -------
         N: int
             Number of qubits.
         dims: list
-            Dimension of the ansatz (default [2]*N).
+            Dimension list of the ansatz (default [2]*N).
+        name: string
+            The name of the ansatz.
+        shape: tuple
+            The shape of the parameters.
+        para: list
+            The parameters of the ansatz.
         qc: QubitCircuit
             The ansatz with given parameters.
         inv_qc: QubitCircuit
             The inverse of ansatz with given parameters.
-        arg_value:
-            An position holder for special ansatzes.
+    Functions
+    -------
+        set_circuit():
+            Setup `qc` as `QubitCircuit`.
+        set_inv_circuit():
+            Setup `qc` as `QubitCircuit`.
     """
-    def __init__(self,x,N,ansatz="regular",arg_value=None):
-        # Init
+    def __init__(self,x,N,ansatz="regular",**arg_value):
         self.N = N
         self.dims= [2]*self.N
         self.name = ansatz
-        self.para = x
+        self.shape = None
 
-        self.qc = None    # Generate circuit on demand
+        self.qc = None    # Generate circuits on demand
         self.inv_qc = None
-
-        # Setup parameters
+        
         if self.name == "regular":
-            # Dimension Check
-            if not isinstance(x[0],(list,np.ndarray,tuple)):
-                if len(x)%3 != 0:
-                    raise ValueError("Ansatz dimension doesn't match\n3 parameters are required for each qubit.")
-                else:
-                    self.para = np.split(x,len(x)//3)
-            if len(self.para) != self.N:
-                raise ValueError("Ansatz dimension doesn't match\n%s parameters are required." % 3*self.N)
+            self.shape = (N,3)
+        elif self.name == "CNN4_1":
+            self.shape = (N,3)
+        elif self.name == "CNN4_2":
+            self.shape = (N,3)
+        elif arg_value != None:
+            try:
+                self.shape = arg_value['shape']
+            except KeyError:
+                raise ValueError("arg 'shape' need to be provided for ansatz: %s" % ansatz)
         else:
-            raise ValueError("Unkown ansatz %s" % ansatz)
+            raise ValueError("Unkown ansatz: %s" % ansatz)
+        
+        self.para  = np.array(x).reshape(self.shape)
+        self.arg = arg_value
 
     def set_circuit(self):
         self.qc = QubitCircuit(self.N)
@@ -55,16 +75,41 @@ class Ansatz:
                 self.qc.add_gate("RZ", i, None, angles[2])
                 i+=1
             for j in range(self.N-1):
-                self.qc.add_gate("CNOT",j,j+1, None)
-            return self.qc
+                self.qc.add_gate("CNOT",j,j+1)
+        elif self.name == "CNN4_1":
+            i = 0
+            for angles in self.para:
+                self.qc.add_gate("RZ", i, None, angles[0])
+                self.qc.add_gate("RX", i, None, angles[1])
+                self.qc.add_gate("RZ", i, None, angles[2])
+                i+=1
+            for j in range(self.N-1):
+                if j //2 == 0:
+                    self.qc.add_gate("CNOT",j,j+1)
+        elif self.name == "CNN4_2":
+            i = 0
+            for angles in self.para:
+                self.qc.add_gate("RZ", i, None, angles[0])
+                self.qc.add_gate("RX", i, None, angles[1])
+                self.qc.add_gate("RZ", i, None, angles[2])
+                i+=1
+            for j in range(self.N-1):
+                if j <2:
+                    self.qc.add_gate("CNOT",j,j+2)
+        elif self.arg != None:
+            try:
+                self.qc = self.arg['structure'](self.para)
+            except KeyError:
+                raise ValueError("arg 'structure' need to be provided for ansatz: %s" % ansatz)
         else:
             raise ValueError("Unkown ansatz: %s" % ansatz)
+        return self.qc
 
     def set_inv_circuit(self):  # It's necessary since the reverse_circuit in qutip didn't take the inverse of gates.
         self.inv_qc = QubitCircuit(self.N)
         if self.name == "regular":
             for j in reversed(range(self.N-1)): # CNOT in inverses order
-                self.inv_qc.add_gate("CNOT",j,j+1, None)
+                self.inv_qc.add_gate("CNOT",j,j+1)
             i = 0
             for angles in reversed(self.para):
                 self.inv_qc.add_gate("RZ", i, None, -angles[2])
@@ -95,7 +140,7 @@ class vcirc:
         self.qc = None      # Generate circuit on demand
         self.inv_qc = None
 
-    def add_ansatz(self,x,ansatz="regular",index=None,arg_value=None):
+    def add_ansatz(self,x,ansatz="regular",index=None,**arg_value):
         """
         Adds an ansatz to the circuit.
 
@@ -103,11 +148,15 @@ class vcirc:
         ----------
             x : list
                 The list of parameters for the ansatz.
-            ansatz : str
-                The structure of ansatz
+            ansatz : string
+                The name of ansatz
+            index: Int
+                The position to insert the ansatz. Insert to the end if None.
+            arg_value:
+                An position holder for special ansatzes.
         """
         if index is None:
-            self.ansatzes.append(Ansatz(x,self.N,ansatz,arg_value))
+            self.ansatzes.append(Ansatz(x,self.N,ansatz,**arg_value))
         else:
             for position in index:
                 self.ansatzes.insert(position,Ansatz(x,self.N,ansatz,arg_value))
@@ -165,7 +214,7 @@ class vcirc:
             self.inv_qc.add_circuit(ansatz.set_inv_circuit())
         return inv_qc
 
-    def update_ansatzes(self,x_in):
+    def update_ansatzes(self,x_in,ansatz_li=None):
         """
         update variational circuit parameters
 
@@ -176,12 +225,13 @@ class vcirc:
         """
         temp_x = np.array(x_in)
         pos = 0
-        for i in range(len(self.ansatzes)):
-            if isinstance(self.ansatzes[i].para[0],(list,tuple,np.ndarray)):
-                for j in range(len(self.ansatzes[i].para)):
-                    n = len(self.ansatzes[i].para[j])
-                    self.ansatzes[i].para[j] = x_in[pos:pos+n]
-                    pos+=n
-            else:
-                ansatz.para = np.delete(temp_x,np.arange(len(ansatz.para)))
+        
+        if ansatz_li == None:
+            for ansatz in self.ansatzes:
+                if isinstance(temp_x[0],np.ndarray):                    
+                    ansatz.para = temp_x[0].reshape(ansatz.shape)
+                    temp_x = np.delete(temp_x,0,0)
+                else:
+                    ansatz.para = temp_x[0:ansatz.para.size].reshape(ansatz.shape)
+                    temp_x = np.delete(temp_x,np.arange(ansatz.para.size))
         self.propagators()
