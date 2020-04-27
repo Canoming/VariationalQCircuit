@@ -6,6 +6,7 @@ Three modules are provided:
     * `sep_purity`: measure the purity of subsystems.
     * `fid_ref`: measure the fidelity between the subsystem of a state and a reference state.
     * `c_entropy`: measure the entropy of the output of the measurement in computational basis.
+    * `dst`: use *destructive swap test* [[10.1103/PhysRevA.87.052330](https://arxiv.org/ct?url=https%3A%2F%2Fdx.doi.org%2F10.1103%2FPhysRevA.87.052330&v=839f8497)] to obtain purity of [sub]systems.
 * `vcirc`: provides variational circuit class
     * Create a variational circuit instance with N qubits: `vc = vcirc(N)`
     * Add a layer of ansatz by `vc.add_ansatz(x)`
