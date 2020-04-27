@@ -25,12 +25,13 @@ def circ_minimize(x0,statein,vcirc,test_func=sep_purity,*args,opt_method="BFGS",
     jac=None, hess=None, hessp=None, bounds=None,
     constraints=(), tol=None, callback=None, options=None):
     res = minimize(vcirc_test,x0,(statein,vcirc,test_func)+args,opt_method,
-    jac, hess, hessp, bounds, constraints, tol, callback, options):
+    jac, hess, hessp, bounds, constraints, tol, callback, options)
     return res
 
 def circ_maximize(x0,statein,vcirc,test_func=sep_purity,*args,opt_method="BFGS",
     jac=None, hess=None, hessp=None, bounds=None,
     constraints=(), tol=None, callback=None, options=None):
     res = minimize(_vcirc_test_neg,x0,(statein,vcirc,test_func)+args,opt_method,
-    jac, hess, hessp, bounds, constraints, tol, callback, options):
+    jac, hess, hessp, bounds, constraints, tol, callback, options)
+    res.fun = -res.fun
     return res

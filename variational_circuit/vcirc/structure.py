@@ -2,6 +2,8 @@ from qutip.qip.circuit import QubitCircuit
 
 def regular(para,N,inv=False):
     qc = QubitCircuit(N)
+    shape = (N,3)
+    para = para.reshape(shape)
     i = 0
     if not inv:
         for angles in para:
@@ -19,11 +21,13 @@ def regular(para,N,inv=False):
             qc.add_gate("RZ", i, None, -angles[1])
             qc.add_gate("RX", i, None, -angles[0])
             i+=1
-    return qc,(N,3)
+    return qc
 
 
 def CNN4_1(para,N,inv=False):
     qc = QubitCircuit(N)
+    shape = (N,3)
+    para = para.reshape(shape)
     i = 0
     if not inv:
         for angles in para:
@@ -36,10 +40,12 @@ def CNN4_1(para,N,inv=False):
                 qc.add_gate("CNOT",j,j+1)
     else:
         raise ValueError('Inverse circuit undefined')
-    return qc,(N,3)
+    return qc
 
 def CNN4_2(para,N,inv=False):
     qc = QubitCircuit(N)
+    shape = (N,3)
+    para = para.reshape(shape)
     i = 0
     if not inv:
         for angles in para:
@@ -52,4 +58,4 @@ def CNN4_2(para,N,inv=False):
                 qc.add_gate("CNOT",j,j+N//2)
     else:
         raise ValueError('Inverse circuit undefined')
-    return qc,(N,3)
+    return qc

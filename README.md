@@ -15,13 +15,11 @@ Three modules are provided:
     ```python
     def custom_struc(parameters,N,inv=False):
         qc = QubitCircuit(N)
-        shape = (M,) # desired shape of parameters
-        para = parameters.reshape(shape)
         # qc.add_gate(...) ... add quatnum gates ...
-        return qc,shape
+        return qc
     ```
 * `optimize`: utilize `scipy.optimize` to optimize variational circuits
     * `circ_maximize` and `circ_minimize`:
     ```python
-        res = circ_minimize(x0,input_state,circuit,test_function,*args)
+        res = circ_minimize(x0,input_state,vcircuit,test_function,*args)
     ```

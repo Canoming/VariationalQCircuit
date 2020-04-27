@@ -24,8 +24,6 @@ class ansatz:
             Dimension list of the ansatz (default [2]*N).
         structure: function
             The function defining the ansatz
-        shape: tuple
-            The shape of the parameters.
         para: list
             The parameters of the ansatz.
         qc: QubitCircuit
@@ -43,22 +41,21 @@ class ansatz:
         self.N = N
         self.dims= [2]*self.N
         self.structure = structure
+        self.name = structure.__name__
         self.para  = np.array(x)
         self.arg = arg_value
         
-        set_circuit()
-        
-        self.pare.reshape(self.shape)
+        self.set_circuit()
         
         self.inv_qc = None # Generate inverse circuits on demand
 
     def set_circuit(self):
-        self.qc,self.shape = self.structure(self.para,self.N,**self.arg)
+        self.qc = self.structure(self.para,self.N,**self.arg)
         return self.qc
 
     # TODO: rewrite the inverse function in qutip.
     def set_inv_circuit(self):  # It's necessary since the reverse_circuit in qutip doesn't take the inverse of gates but only the order.
-        self.inv_qc,self.shape = self.structure(self.para,self.N,**self.arg,inv=True)
+        self.inv_qc = self.structure(self.para,self.N,**self.arg,inv=True)
         return self.inv_qc
 
 class vcirc:
@@ -213,9 +210,9 @@ class vcirc:
         if ansatz_li == None:
             for ansatz in self.ansatzes:
                 if isinstance(temp_x[0],np.ndarray):                    
-                    ansatz.para = temp_x[0].reshape(ansatz.shape)
+                    ansatz.para = temp_x[0]
                     temp_x = np.delete(temp_x,0,0)
                 else:
-                    ansatz.para = temp_x[0:ansatz.para.size].reshape(ansatz.shape)
+                    ansatz.para = temp_x[0:ansatz.para.size]
                     temp_x = np.delete(temp_x,np.arange(ansatz.para.size))
         self.propagators()
