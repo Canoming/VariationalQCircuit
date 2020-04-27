@@ -1,8 +1,9 @@
 import numpy as np
 
-from qutip.qip.circuit import *
+from qutip.qip.circuit import gate_sequence_product,QubitCircuit
+from .structure import regular
 
-class Ansatz:
+class ansatz:
     """
     The class of ansatzs
     
@@ -12,18 +13,17 @@ class Ansatz:
             The parameters of the ansatz.
         N: int
             Number of qubits.
-        ansatz: string
-            The name of ansatz.
-        arg_value:
-            An position holder for special ansatzes.
+        structure: function
+            The function defining the ansatz
+        arg_value: position holder for special ansatzes.
     Attributes
     -------
         N: int
             Number of qubits.
         dims: list
             Dimension list of the ansatz (default [2]*N).
-        name: string
-            The name of the ansatz.
+        structure: function
+            The function defining the ansatz
         shape: tuple
             The shape of the parameters.
         para: list
@@ -39,98 +39,50 @@ class Ansatz:
         set_inv_circuit():
             Setup `qc` as `QubitCircuit`.
     """
-    def __init__(self,x,N,ansatz="regular",**arg_value):
+    def __init__(self,x,N,structure=regular,**arg_value):
         self.N = N
         self.dims= [2]*self.N
-        self.name = ansatz
-        self.shape = None
-
-        self.qc = None    # Generate circuits on demand
-        self.inv_qc = None
-        
-        if self.name == "regular":
-            self.shape = (N,3)
-        elif self.name == "CNN4_1":
-            self.shape = (N,3)
-        elif self.name == "CNN4_2":
-            self.shape = (N,3)
-        elif arg_value != None:
-            try:
-                self.shape = arg_value['shape']
-            except KeyError:
-                raise ValueError("arg 'shape' need to be provided for ansatz: %s" % ansatz)
-        else:
-            raise ValueError("Unkown ansatz: %s" % ansatz)
-        
-        self.para  = np.array(x).reshape(self.shape)
+        self.structure = structure
+        self.para  = np.array(x)
         self.arg = arg_value
+        
+        set_circuit()
+        
+        self.pare.reshape(self.shape)
+        
+        self.inv_qc = None # Generate inverse circuits on demand
 
     def set_circuit(self):
-        self.qc = QubitCircuit(self.N)
-        if self.name == "regular":
-            i = 0
-            for angles in self.para:
-                self.qc.add_gate("RZ", i, None, angles[0])
-                self.qc.add_gate("RX", i, None, angles[1])
-                self.qc.add_gate("RZ", i, None, angles[2])
-                i+=1
-            for j in range(self.N-1):
-                self.qc.add_gate("CNOT",j,j+1)
-        elif self.name == "CNN4_1":
-            i = 0
-            for angles in self.para:
-                self.qc.add_gate("RZ", i, None, angles[0])
-                self.qc.add_gate("RX", i, None, angles[1])
-                self.qc.add_gate("RZ", i, None, angles[2])
-                i+=1
-            for j in range(self.N-1):
-                if j //2 == 0:
-                    self.qc.add_gate("CNOT",j,j+1)
-        elif self.name == "CNN4_2":
-            i = 0
-            for angles in self.para:
-                self.qc.add_gate("RZ", i, None, angles[0])
-                self.qc.add_gate("RX", i, None, angles[1])
-                self.qc.add_gate("RZ", i, None, angles[2])
-                i+=1
-            for j in range(self.N-1):
-                if j <2:
-                    self.qc.add_gate("CNOT",j,j+2)
-        elif self.arg != None:
-            try:
-                self.qc = self.arg['structure'](self.para)
-            except KeyError:
-                raise ValueError("arg 'structure' need to be provided for ansatz: %s" % ansatz)
-        else:
-            raise ValueError("Unkown ansatz: %s" % ansatz)
+        self.qc,self.shape = self.structure(self.para,self.N,**self.arg)
         return self.qc
 
-    def set_inv_circuit(self):  # It's necessary since the reverse_circuit in qutip didn't take the inverse of gates.
-        self.inv_qc = QubitCircuit(self.N)
-        if self.name == "regular":
-            for j in reversed(range(self.N-1)): # CNOT in inverses order
-                self.inv_qc.add_gate("CNOT",j,j+1)
-            i = 0
-            for angles in reversed(self.para):
-                self.inv_qc.add_gate("RZ", i, None, -angles[2])
-                self.inv_qc.add_gate("RZ", i, None, -angles[1])
-                self.inv_qc.add_gate("RX", i, None, -angles[0])
-                i+=1
-            return self.inv_qc
-        else:
-            raise ValueError("Unkown ansatz: %s" % ansatz)
+    # TODO: rewrite the inverse function in qutip.
+    def set_inv_circuit(self):  # It's necessary since the reverse_circuit in qutip doesn't take the inverse of gates but only the order.
+        self.inv_qc,self.shape = self.structure(self.para,self.N,**self.arg,inv=True)
+        return self.inv_qc
 
 class vcirc:
     """
     Generate the variational circuit
-
+    
     Parameters
     ----------
         N: int
             The number of qubits in the circuit.
-    Return
-    ------
+    Attributes
+    -------
+        N: int
+            The number of qubits in the circuit.
+        dims: list
+            Dimension list of the ansatz (default [2]*N).
         qc: QubitCircuit
+            The variational circuit.
+        inv_qc: QubitCircuit
+            The inverse of the variational cricuit.
+        statein: Qobj
+            The input state
+        stateout: Qobj
+            The output state
     """
     def __init__(self,N):
         self.N = N
@@ -140,7 +92,39 @@ class vcirc:
         self.qc = None      # Generate circuit on demand
         self.inv_qc = None
 
-    def add_ansatz(self,x,ansatz="regular",index=None,**arg_value):
+        self.statein= None
+        self.stateout = None
+    
+    def add_input(self,statein):
+        if (statein.dims[0] != [2]*self.N):
+            raise ValueError("Invalid input state, must be state on %s qubits system." % N)
+        self.statein = statein
+    
+    def compress(self):
+        """
+        Get the matrix of the variational circuit
+
+        Return
+        ------
+            Matrix representation of the variational circuit.
+        """
+        return gate_sequence_product(self.propagators().propagators())
+
+    def apply_to(self,statein=None,update=False):
+        if statein == None:
+            if self.statein == None:
+                raise ValueError("Input must be provided")
+            else:
+                self.stateout = self.statein.transform(self.compress())
+                return self.stateout
+        else:
+            stateout = statein.transform(self.compress())
+            if update:
+                self.stateout = stateout
+                self.statein = statein
+        return stateout
+
+    def add_ansatz(self,x,structure=regular,index=None,**arg_value):
         """
         Adds an ansatz to the circuit.
 
@@ -156,10 +140,10 @@ class vcirc:
                 An position holder for special ansatzes.
         """
         if index is None:
-            self.ansatzes.append(Ansatz(x,self.N,ansatz,**arg_value))
+            self.ansatzes.append(ansatz(x,self.N,structure,**arg_value))
         else:
             for position in index:
-                self.ansatzes.insert(position,Ansatz(x,self.N,ansatz,arg_value))
+                self.ansatzes.insert(position,ansatz(x,self.N,structure,arg_value))
 
     def remove_ansatz(self,index=None,end=None,name=None,remove="first"):
         """
