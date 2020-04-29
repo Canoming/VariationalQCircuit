@@ -1,6 +1,7 @@
 import numpy as np
 
 from qutip.qip.circuit import gate_sequence_product,QubitCircuit
+from qutip import Qobj
 from .structure import regular
 
 class ansatz:
@@ -28,13 +29,9 @@ class ansatz:
             The parameters of the ansatz.
         qc: QubitCircuit
             The ansatz with given parameters.
-        inv_qc: QubitCircuit
-            The inverse of ansatz with given parameters.
     Functions
     -------
         set_circuit():
-            Setup `qc` as `QubitCircuit`.
-        set_inv_circuit():
             Setup `qc` as `QubitCircuit`.
     """
     def __init__(self,x,N,structure=regular,**arg_value):
@@ -46,17 +43,10 @@ class ansatz:
         self.arg = arg_value
         
         self.set_circuit()
-        
-        self.inv_qc = None # Generate inverse circuits on demand
 
     def set_circuit(self):
         self.qc = self.structure(self.para,self.N,**self.arg)
         return self.qc
-
-    # TODO: rewrite the inverse function in qutip.
-    def set_inv_circuit(self):  # It's necessary since the reverse_circuit in qutip doesn't take the inverse of gates but only the order.
-        self.inv_qc = self.structure(self.para,self.N,**self.arg,inv=True)
-        return self.inv_qc
 
 class vcirc:
     """
@@ -74,8 +64,6 @@ class vcirc:
             Dimension list of the ansatz (default [2]*N).
         qc: QubitCircuit
             The variational circuit.
-        inv_qc: QubitCircuit
-            The inverse of the variational cricuit.
         statein: Qobj
             The input state
         stateout: Qobj
@@ -87,16 +75,15 @@ class vcirc:
         self.ansatzes = []
 
         self.qc = None      # Generate circuit on demand
-        self.inv_qc = None
 
-        self.statein= None
-        self.stateout = None
+        self.statein = Qobj()
+        self.stateout = Qobj()
     
     def add_input(self,statein):
         if (statein.dims[0] != [2]*self.N):
             raise ValueError("Invalid input state, must be state on %s qubits system." % N)
         self.statein = statein
-    
+
     def compress(self):
         """
         Get the matrix of the variational circuit
@@ -107,18 +94,18 @@ class vcirc:
         """
         return gate_sequence_product(self.propagators().propagators())
 
-    def apply_to(self,statein=None,update=False):
-        if statein == None:
-            if self.statein == None:
-                raise ValueError("Input must be provided")
-            else:
-                self.stateout = self.statein.transform(self.compress())
-                return self.stateout
+    def apply_to(self,state=None,update=False,inverse=False):
+        if state != None:
+                statein = state
         else:
-            stateout = statein.transform(self.compress())
-            if update:
-                self.stateout = stateout
-                self.statein = statein
+            statein = self.statein if not inverse else self.stateout
+        if not isinstance(statein,Qobj):
+            raise TypeError("Input must be provided,\n"+str(state)+"\nis not a Qobj")
+        stateout = statein.transform(self.compress(),inverse)
+
+        if update:
+            self.stateout = stateout if not inverse else statein
+            self.statein = statein if not inverse else stateout
         return stateout
 
     def add_ansatz(self,x,structure=regular,index=None,**arg_value):
@@ -188,12 +175,6 @@ class vcirc:
         for ansatz in self.ansatzes:
             self.qc.add_circuit(ansatz.set_circuit())
         return self.qc
-
-    def inv_propagators(self):
-        self.inv_qc = QubitCircuit(self.N)
-        for ansatz in reversed(self.ansatzes):
-            self.inv_qc.add_circuit(ansatz.set_inv_circuit())
-        return inv_qc
 
     def update_ansatzes(self,x_in,ansatz_li=None):
         """

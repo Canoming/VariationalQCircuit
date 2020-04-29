@@ -27,10 +27,10 @@ def com_measure(state):
     elif state.type == "oper":
         prob = state.diag()
     else:
-        raise ValueError("Invalid input state, must be state on %s qubits system." % N)
+        raise ValueError("Invalid input state.")
     return prob
 
-def dst_measurement(state,sample_size=1,prob_out=False):
+def dst_measurement(state,sample_size=1):
     """destructive swap test"""
     N = len(state.dims[0])
     # Random output
@@ -38,8 +38,6 @@ def dst_measurement(state,sample_size=1,prob_out=False):
     stateout = statein.transform(gate_sequence_product(dst_circ(N).propagators()))
 
     prob = com_measure(stateout)
-    if prob_out:
-        return prob
     dst = np.random.choice(4**N,sample_size,p=prob)
     mresult= [BitVec(uint= result,length=N*2) for result in dst]
     return mresult # raw output
