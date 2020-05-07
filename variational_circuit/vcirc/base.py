@@ -73,6 +73,7 @@ class vcirc:
         self.N = N
         self.dims = [2]*self.N
         self.ansatzes = []
+        self.structure = []
 
         self.qc = None      # Generate circuit on demand
 
@@ -125,9 +126,11 @@ class vcirc:
         """
         if index is None:
             self.ansatzes.append(ansatz(x,self.N,structure,**arg_value))
+            self.structure.append(self.ansatzes[-1].name)
         else:
             for position in index:
                 self.ansatzes.insert(position,ansatz(x,self.N,structure,arg_value))
+                self.structure.insert(position,self.ansatzes[position].name)
 
     def remove_ansatz(self,index=None,end=None,name=None,remove="first"):
         """
@@ -145,28 +148,39 @@ class vcirc:
             remove : str
                 If first or all gate are to be removed.
         """
-        if index is not None and index <= self.N:
+        if index is not None:
+            if index > self.N:
+                raise ValueError("Index exceeds number of ansatzes.")
             if end is not None and end <= self.N:
                 for i in range(end - index):
                     self.ansatzes.pop(index + i)
+                    self.structure.pop(index + i)
             elif end is not None and end > self.N:
                 raise ValueError("End target exceeds number of ansatzes.")
             else:
                 self.ansatzes.pop(index)
+                self.structure.pop(index)
+
         elif name is not None and remove == "first":
-            for ansatz in self.ansatzes:
-                if name == ansatz.name:
-                    self.ansatzes.remove(ansatz)
+            for i in range(len(self.ansatzes)):
+                if name == self.ansatzes[i].name:
+                    self.ansatzes.pop(i)
+                    self.structure.pop(i)
                     break
+
         elif name is not None and remove == "last":
-            for ansatz in reversed(self.ansatzes):
-                if name == ansatz.name:
-                    self.ansatzes.remove(ansatz)
+            for i in reversed(range(len(self.ansatzes))):
+                if name == self.ansatzes[self.N-i].name:
+                    self.ansatzes.pop(i)
+                    self.structure.pop(i)
                     break
+
         elif name is not None and remove == "all":
-            for ansatz in self.ansatzes:
-                if name == ansatz.name:
-                    self.ansatzes.remove(ansatz)
+            for i in reversed(range(len(self.ansatzes))):
+                if name == self.ansatzes[i].name:
+                    self.ansatzes.pop(i)
+                    self.structure.pop(i)
+
         else:
             self.gates.pop()
 
