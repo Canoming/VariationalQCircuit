@@ -1,11 +1,9 @@
 import numpy as np
 
-from qutip import Qobj
+from qutip import Qobj, state_index_number, state_number_index
 from qutip.qip.operations.gates import gate_sequence_product
 from qutip.qip.circuit import QubitCircuit
 from qutip.tensor import tensor
-
-from ..bitfunc import BitVec,inner
 
 ############ Circuit ##################
 
@@ -39,7 +37,7 @@ def dst_measurement(state,sample_size=1):
 
     prob = com_measure(stateout)
     dst = np.random.choice(4**N,sample_size,p=prob)
-    mresult= [BitVec(uint= result,length=N*2) for result in dst]
+    mresult = [state_index_number(stateout.dims[0],result) for result in dst]
     return mresult # raw output
 
 ############ Post process ##################

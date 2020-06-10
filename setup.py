@@ -1,7 +1,7 @@
 from setuptools import setup,find_packages
 
 setup(name='variational_circuit',
-      version='0.33',
+      version='0.4',
       description='QuTip based variational circuit',
       url='https://github.com/Canoming/VariationalQCircuit',
       author='Canoming',
@@ -12,6 +12,5 @@ setup(name='variational_circuit',
           'numpy',
           'scipy',
           'qutip',
-          'bitstring',
       ],
       zip_safe=False)
