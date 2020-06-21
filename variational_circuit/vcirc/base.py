@@ -199,13 +199,25 @@ class vcirc:
         else:
             self.ansatzes.pop()
 
-    def propagators(self):
+    def propagators(self,ansatz_li=None):
         self.qc = QubitCircuit(self.N)
-        for ansa in self.ansatzes:
-            if ansa.pos is None:
-                self.qc.add_circuit(ansa.set_circuit())
-            elif isinstance(ansa.pos,(list,tuple,np.ndarray)):
-                self.qc.add_circuit(self.__permute_circuit(ansa.set_circuit(),ansa.pos))
+        if ansatz_li is None:
+            for ansa in self.ansatzes:
+                if ansa.pos is None:
+                    self.qc.add_circuit(ansa.set_circuit())
+                elif isinstance(ansa.pos,(list,tuple,np.ndarray)):
+                    self.qc.add_circuit(self.__permute_circuit(ansa.set_circuit(),ansa.pos))
+                else:
+                    raise ValueError('The position of ansatz {} is not valid'.format(ansa.name))
+        elif isinstance(ansatz_li,(list,tuple,np.ndarray)):
+            for pos in ansatz_li:
+                temp_ansatz = self.ansatzes[pos]
+                if temp_ansatz is None:
+                    self.qc.add_circuit(temp_ansatz.set_circuit())
+                elif isinstance(temp_ansatz.pos,(list,tuple,np.ndarray)):
+                    self.qc.add_circuit(self.__permute_circuit(temp_ansatz.set_circuit(),temp_ansatz.pos))
+                else:
+                    raise ValueError('The position of ansatz {} is not valid'.format(ansa.name))
 
         return self.qc
 
@@ -229,31 +241,16 @@ class vcirc:
                 raise NotImplementedError("Qubit allocated outside the circuit")
 
             for gate in qc2add.gates:
-                if gate.name in ["RX", "RY", "RZ", "SNOT", "SQRTNOT", "PHASEGATE"]:
-                    temp_qc.add_gate(gate.name, pos[gate.targets[0]], None,
-                                gate.arg_value, gate.arg_label)
-                elif gate.name in ["CPHASE", "CNOT", "CSIGN", "CRX", "CRY", "CRZ"]:
-                    temp_qc.add_gate(gate.name, pos[gate.targets[0]],
-                                pos[gate.controls[0]], gate.arg_value,
-                                gate.arg_label)
-                elif gate.name in ["BERKELEY", "SWAPalpha", "SWAP", "ISWAP",
-                                "SQRTSWAP", "SQRTISWAP"]:
-                    temp_qc.add_gate(gate.name, None,
-                                [pos[gate.controls[0]],
-                                pos[gate.controls[1]]], None, None)
-                elif gate.name in ["TOFFOLI"]:
-                    temp_qc.add_gate(gate.name, pos[gate.targets[0]],
-                                [pos[gate.controls[0]],
-                                pos[gate.controls[1]]], None, None)
-                elif gate.name in ["FREDKIN"]:
-                    temp_qc.add_gate(gate.name,
-                                [pos[gate.targets[0]],
-                                pos[gate.targets[1]]],
-                                pos[gate.controls], None, None)
-                elif gate.name in self.user_gates:
-                    temp_qc.add_gate(
-                                gate.name, targets=[pos[k] for k in gate.targets],
-                                arg_value=gate.arg_value)
+                if gate.targets is not None:
+                    temp_tar = [pos[target] for target in gate.targets]
+                else:
+                    temp_tar = None
+                if gate.controls is not None:
+                    temp_ctrl = [pos[control] for control in gate.controls]
+                else:
+                    temp_tar = None
+                temp_qc.add_gate(gate.name, temp_tar, temp_ctrl,
+                                 gate.arg_value,gate.arg_lable),
             return temp_qc
         else:
             return qc2add
