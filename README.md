@@ -3,6 +3,7 @@ Variational quantum circuit module. Provides support to variational circuits on 
 
 Three sub-modules are provided:
 * `measure`: provides some measures of qubit systems
+    * `com_measure`: return the probability distribution of the measurement in computational basis.
     * `sep_purity`: measure the purity of subsystems.
     * `fid_ref`: measure the fidelity between the subsystem of a state and a reference state.
     * `c_entropy`: measure the entropy of the output of the measurement in computational basis.
@@ -20,6 +21,10 @@ Three sub-modules are provided:
                 return qc
             ```
     * Evaluation is simple: `vc.apply_to(state)`
+    * Ansatzes can be added to subsystems: `vc.add_ansatz(x,pos=[0,1])`
+    * The unitary given by the circuit can be obtained by `vc.compress()`
+    * Structure of the ansatzes can be read from `vc.structures`, which contains a list of the tuples (`name_of_ansatz`,`subsystem`,`hyper-parameters`).
+    * Current parameters can be read from `vc.para`.
 * `optimize`: utilize `scipy.optimize` to optimize variational circuits
     * `circ_maximize` and `circ_minimize`:
         ```python

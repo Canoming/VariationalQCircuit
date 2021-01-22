@@ -1,6 +1,6 @@
 from scipy.optimize import minimize
 
-from .measure.measure_sample import dst
+from .measure.measure_sample import dst,hst,dst_source
 from .measure.measure_sim import sep_purity, fid_ref, c_entropy
 
 def  vcirc_test(

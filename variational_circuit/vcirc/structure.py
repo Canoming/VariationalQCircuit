@@ -1,6 +1,9 @@
 from qutip.qip.circuit import QubitCircuit
 
 def vcnot_1(para,N):
+    """
+    Nearby qubits, start from 0
+    """
     qc = QubitCircuit(N)
     shape = (N//2,)
     para = para.reshape(shape)
@@ -10,6 +13,9 @@ def vcnot_1(para,N):
     return qc
 
 def vcnot_2(para,N):
+    """
+    Long range CNOT, cross half circuit
+    """
     qc = QubitCircuit(N)
     shape = (N//2,)
     para = para.reshape(shape)
@@ -19,11 +25,14 @@ def vcnot_2(para,N):
     return qc
 
 def vcnot_3(para,N):
+    """
+    Nearby qubits, start from 1
+    """
     qc = QubitCircuit(N)
-    shape = (N//2,)
+    shape = ((N-1)//2,)
     para = para.reshape(shape)
     i = 0
-    for j in range(N//2):
+    for j in range((N-1)//2):
         if 2*j<N-2:
             qc.add_gate("CRX",2*j+1,2*j+2,para[j])
     return qc
@@ -54,7 +63,6 @@ def regular(para,N):
         qc.add_gate("CNOT",j,j+1)
     return qc
 
-
 def CNN4_1(para,N):
     qc = QubitCircuit(N)
     shape = (N,3)
@@ -70,7 +78,7 @@ def CNN4_1(para,N):
             qc.add_gate("CNOT",j,j+1)
     return qc
 
-def CNN4_2(para,N,inv=False):
+def CNN4_2(para,N):
     qc = QubitCircuit(N)
     shape = (N,3)
     para = para.reshape(shape)
