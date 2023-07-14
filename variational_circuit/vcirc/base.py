@@ -1,67 +1,161 @@
 import numpy as np
 
-from qutip.qip.circuit import gate_sequence_product,QubitCircuit
+import warnings
+from qutip.qip.circuit import QubitCircuit,CircuitSimulator, _para_gates, Gate, Measurement
 from qutip import Qobj
 from .structure import regular
 
-class ansatz:
+class Ansatz(QubitCircuit):
     """
     The class of ansatzs
     
     Parameters
     ----------
-        x: list
-            The parameters of the ansatz.
-        N: int
-            Number of qubits.
-        structure: func
-            The function defining the ansatz
-        pos: list
-            The positions of the ansatz.
-        arg_value: position holder for special ansatzes.
-    Attributes
-    -------
-        N: int
-            Number of qubits.
-        dims: list
-            Dimension list of the ansatz (default [2]*N).
-        structure: function
-            The function defining the ansatz
-        para: list
-            The parameters of the ansatz.
-        qc: QubitCircuit
-            The ansatz with given parameters.
-    Functions
-    -------
-        set_circuit():
-            Setup `qc` as `QubitCircuit`.
+    x: list
+        The parameters of the ansatz.
+    N: int
+        Number of qubits.
+    user_gates: dict
+        Self defined gates
+    dims: list
+        A list of integer for the dimension of each composite system.
+        e.g [2,2,2,2,2] for 5 qubits system. If None, qubits system
+        will be the default option.
+    num_cbits : int
+        Number of classical bits in the system.
+    structure: method
+        The function defining the ansatz
+    arg_value: dict
+        position holder for special ansatzes.
     """
-    def __init__(self,x,N=None,structure=regular,pos=None,**arg_value):
-        self.N = N
-        if pos is not None:
-            if N is not None:
-                try:
-                    if len(pos) != N:
-                        raise ValueError("The list of qubits in `pos` doesn't match the number of qubits `N`.")
-                except ValueError as ve:
-                    print(ve)
-                for i in range(len(pos)):
-                    if pos[i]<0 or pos[i]>=N:
-                        raise ValueError("The {}th position exceses the ansatz size".formate(i))
-            self.N = len(pos)
-        self.pos = pos
-        self.dims= [2]*self.N
-        self.structure = structure
-        self.name = (structure.__name__,pos,arg_value)
-        self.para  = np.array(x)
+    def __init__(self, x, N:int, user_gates:dict = None,
+            dims:list = None, num_cbits:int = 0,structure = regular,
+            pos:list = None, **arg_value):
+        
+        QubitCircuit.__init__(self, N, user_gates = user_gates,
+            dims = dims, num_cbits = num_cbits)
+
         self.arg = arg_value
-        self.qc = None                      # generate on demand
+        self.paras  = np.array(x)
 
-    def set_circuit(self):
-        self.qc = self.structure(self.para,self.N,**self.arg)
-        return self.qc
+        self.sim = None     # Generate on demand
 
-class vcirc:
+        self.__updated = False # generate unitary only if necessary
+        self.__result = None   # Initialize the result
+
+        if pos is None:
+            self.pos = list(range(N))
+        else:
+            self.pos = pos
+
+        self.structure = structure
+        self.structure(self)
+
+    @property
+    def info(self) -> str:
+        """
+        Get the information
+        """
+        return f"(structure: {self.structure.__name__}, size: {self.N}, \
+positions: {self.pos}, arguments: {self.arg})"
+
+    def _sync_para(self):
+        paras = []
+        for gate in self.gates:
+            if gate.name in _para_gates:
+                if gate.arg_value is None:
+                    raise ValueError(f"The parameter of the gate {gate.name} \
+                        is missing.")
+                else:
+                    paras.append(gate.arg_value)
+            elif gate.name in self.user_gates:
+                if gate.arg_value is not None:
+                    paras.append(gate.arg_value)
+            else:
+                if gate.arg_value is not None:
+                    gate.arg_value = None
+                    warnings.warn(f"The parameter of the gate {gate.name} \
+                        is deleted.")
+        
+        self.paras = np.array(paras)
+
+    def update(self, x = None, gate_li:list = None):
+        """
+        Update the parameters of the ansatz.
+
+        Parameters
+        ----------
+        x: array
+            The new parameters.
+        gate_li: list
+            The index of the gates to be updated.
+        """
+
+        head = 0
+
+        if x is not None:
+            if gate_li is None:
+                # Check length
+                if len(x) != len(self.paras):
+                    raise ValueError(f"{len(self.paras)} parameters are \
+required, but {len(x)} are provided.")
+
+                self.paras = np.array(x[0:len(self.paras)])       # update parameters
+
+                for i, gate in enumerate(self.gates):
+                    if isinstance(gate,Gate) and gate.arg_value is not None:
+                        try:
+                            gate.arg_value = self.paras[head]
+                            head += 1
+                        except IndexError:
+                            raise ValueError(f"run out of parameters at gate {i}")
+
+            elif isinstance(gate_li,(list,tuple,np.ndarray)):
+                # Check length
+                if len(x) != len(gate_li):
+                    raise ValueError("The number of parameters does not match the list of gates.")
+
+                for i in gate_li:
+                    if self.gates[i].arg_value is not None:
+                        try:
+                            self.gates[i].arg_value = x[head]
+                            head += 1
+                        except IndexError:
+                            raise ValueError(f"run out of parameters at gate {i}")
+                self._sync_para()
+        else:
+            self._sync_para()
+        
+        self.__updated = True
+
+    @property
+    def unitary(self) -> list:
+        if not self.__updated:
+            return self.compress()
+        else:
+            return self.sim.ops
+
+    @property
+    def result(self):
+        if not self.__updated:
+            self.compress()
+            
+        return self.__result
+
+    def compress(self) -> list:
+        """
+        Get the matrix of the ansatz
+
+        Return
+        ------
+            Matrix representation of the ansatz.
+        """
+        self.sim = CircuitSimulator(self, state=None, precompute_unitary=True)
+        self.__updated = True
+
+        return self.sim.ops
+
+class Vcirc(QubitCircuit):
     """
     Generate the variational circuit
     
@@ -69,44 +163,68 @@ class vcirc:
     ----------
         N: int
             The number of qubits in the circuit.
-    Attributes
-    -------
-        N: int
-            The number of qubits in the circuit.
         dims: list
             Dimension list of the ansatz (default [2]*N).
         qc: QubitCircuit
             The variational circuit.
         statein: Qobj
-            The input state
-        stateout: Qobj
-            The output state
+            The input state.
+        result: CircuitResult
+            The result of the previous run.
     """
-    def __init__(self,N):
-        self.N = N
-        self.dims = [2]*self.N
+    def __init__(self, N:int, user_gates:dict = None,
+            dims:list = None, num_cbits:int = 0):
+
+        QubitCircuit.__init__(self, N, user_gates = user_gates,
+                dims = dims, num_cbits = num_cbits)
+
         self.ansatzes = []
-        self.structures = []
-        self.para = []
 
-        self.qc = None      # Generate circuit on demand
+        self.sim = None     # Generate on demand
 
-        self.statein = Qobj()
-        self.stateout = Qobj()
+        self.__updated = False # generate unitary only if necessary
+        self.__result = None   # Initialize the result
+
+        self.statein = None    # Initialize the input state
     
-    def add_input(self,statein):
+    def add_input(self, statein:Qobj):
         # TODO: Input on partial system
         if statein.isket or statein.isoper:
             if statein.dims[0] != self.dims:
-                raise ValueError("Invalid input state, must be state on {%s} qubits system.".format(N))
+                raise ValueError("Invalid input state, must be a state on \
+                    {%s} qubits system.".format(self.N))
         elif statein.isbra:
             if statein.dims[1] != self.dims:
-                raise ValueError("Invalid input state, must be state on {%s} qubits system.".format(N))
+                raise ValueError("Invalid input state, must be state on \
+                    {%s} qubits system.".format(self.N))
         else:
             raise ValueError("The input should be a quantum state")
         self.statein = statein
+        self.__updated = False  # Reset the flag
 
-    def compress(self):
+    @property
+    def info(self):
+        return [ansa.info for ansa in self.ansatzes]
+
+    @property
+    def paras(self):
+        return [ansa.paras for ansa in self.ansatzes]
+
+    @property
+    def unitary(self) -> list:
+        if not self.__updated:
+            return self.compress()
+        else:
+            return self.sim.ops
+
+    @property
+    def result(self):
+        if not self.__updated:
+            self.compress()
+            
+        return self.__result
+
+    def compress(self,ansatz_li:list = []) -> list:
         """
         Get the matrix of the variational circuit
 
@@ -114,28 +232,35 @@ class vcirc:
         ------
             Matrix representation of the variational circuit.
         """
-        return gate_sequence_product(self.propagators().propagators())
+        if len(ansatz_li) == 0:
+            self.gates = []
+            for ansatz in self.ansatzes:
+                self.add_circuit(self.__permute_circuit(ansatz,ansatz.pos))
+            self.sim = CircuitSimulator(self, state=self.statein, precompute_unitary=True)
+            self.__updated = True
 
-    def apply_to(self,state=None,update=False,inverse=False):
-        if state != None:
-                statein = state
+            return self.sim.ops
         else:
-            statein = self.statein if not inverse else self.stateout
-        if not isinstance(statein,Qobj):
-            raise TypeError("Input must be provided,\n{}\nis not a Qobj".format(str(state)))
+            return [self.ansatzes[i].compress()[0] for i in ansatz_li]
 
-        stateout = statein
-        if not inverse:
-            for gate in self.propagators().propagators():
-                stateout = stateout.transform(gate,inverse)
+    def apply_to(self,statein:Qobj = None,stat:bool = False):
+        """
+        Apply the circuit to a state.
+        Return the quantum state if `stat` is `False` and return the ensemble
+        of the computational basis measurements is `stat` is `True`.
+        """
+        if not self.__updated:
+            self.compress()
+
+        if statein != None:
+                self.sim.initialize(state=statein)
+        
+        if stat:
+            self.__result = self.sim.run_statistics(statein)
         else:
-            for gate in reversed(self.propagators().propagators()):
-                stateout = stateout.transform(gate,inverse)
+            self.__result = self.sim.run(statein)
 
-        if update:
-            self.stateout = stateout if not inverse else statein
-            self.statein = statein if not inverse else stateout
-        return stateout
+        return self.__result.get_final_states()[0]
 
     def add_ansatz(self,x,structure=regular,pos=None,index=None,**arg_value):
         """
@@ -160,13 +285,13 @@ class vcirc:
         else:
             size = len(pos)
         if index is None:
-            self.ansatzes.append(ansatz(x,size,structure,pos,**arg_value))
+            self.ansatzes.append(Ansatz(x, size, structure=structure,
+            pos=pos, **arg_value))
         else:
             for position in index:
-                self.ansatzes.insert(position,ansatz(x,size,structure,pos,**arg_value))
-        self.__update_structures()
-        self.__update_para()
-        self.propagators()
+                self.ansatzes.insert(position,Ansatz(x, size,
+                structure=structure, pos=pos,**arg_value))
+        self.__updated = False
 
     def remove_ansatz(self,index=None,end=None,name=None,remove="first"):
         """
@@ -214,71 +339,7 @@ class vcirc:
                     self.ansatzes.pop(i)
         else:
             self.ansatzes.pop()
-        self.__update_structures()
-        self.__update_para()
-        self.propagators()
-
-    def propagators(self,ansatz_li=None):
-        self.qc = QubitCircuit(self.N)
-        if ansatz_li is None:
-            for ansa in self.ansatzes:
-                if ansa.pos is None:
-                    self.qc.add_circuit(ansa.set_circuit())
-                elif isinstance(ansa.pos,(list,tuple,np.ndarray)):
-                    self.qc.add_circuit(self.__permute_circuit(ansa.set_circuit(),ansa.pos))
-                else:
-                    raise ValueError('The position of ansatz {} is not valid'.format(ansa.name))
-        elif isinstance(ansatz_li,(list,tuple,np.ndarray)):
-            for pos in ansatz_li:
-                temp_ansatz = self.ansatzes[pos]
-                if temp_ansatz is None:
-                    self.qc.add_circuit(temp_ansatz.set_circuit())
-                elif isinstance(temp_ansatz.pos,(list,tuple,np.ndarray)):
-                    self.qc.add_circuit(self.__permute_circuit(temp_ansatz.set_circuit(),temp_ansatz.pos))
-                else:
-                    raise ValueError('The position of ansatz {} is not valid'.format(ansa.name))
-
-        return self.qc
-    
-    def __update_structures(self):
-        self.structures = [ansa.name for ansa in self.ansatzes]
-    
-    def __update_para(self):
-        self.para = [ansa.para for ansa in self.ansatzes]
-
-    def __permute_circuit(self, qc2add, pos=None):
-        """
-        **Override the add_circuit function in QuTiP**
-
-        Adds a block of a qubit circuit to the main circuit.
-        Globalphase gates are not added.
-
-        Parameters
-        ----------
-        qc : QubitCircuit
-            The circuit block to be added to the main circuit.
-        pos : list
-            The arrangement of qubits.
-        """
-        if pos is not None:
-            temp_qc = QubitCircuit(self.N)
-            if max(pos) >= self.N or min(pos) < 0:
-                raise NotImplementedError("Qubit allocated outside the circuit")
-
-            for gate in qc2add.gates:
-                if gate.targets is not None:
-                    temp_tar = [pos[target] for target in gate.targets]
-                else:
-                    temp_tar = None
-                if gate.controls is not None:
-                    temp_ctrl = [pos[control] for control in gate.controls]
-                else:
-                    temp_ctrl = None
-                temp_qc.add_gate(gate.name, temp_tar, temp_ctrl,
-                                 gate.arg_value,gate.arg_label),
-            return temp_qc
-        else:
-            return qc2add
+        self.__updated = False
 
     def update_ansatzes(self,x_in,ansatz_li=None):
         """
@@ -294,22 +355,69 @@ class vcirc:
         head = 0
         
         if ansatz_li == None:
-            for ansa in self.ansatzes:
-                if isinstance(x_in[head],(list,tuple,np.ndarray)):
-                    ansa.para = np.array(x_in[head])
-                    head += 1
-                else:
-                    ansa.para = np.array(x_in[head:head+len(ansa.para)])
-                    head += len(ansa.para)
+            for i,ansa in enumerate(self.ansatzes):
+                try:
+                    if len(ansa.paras) == 0: # skip empty ansatzes
+                        continue
+                    if isinstance(x_in[head],(list,tuple,np.ndarray)):
+                        ansa.update(x_in[head])
+                        head += 1
+                    else:
+                        ansa.update(np.array(x_in[head:head+len(ansa.paras)]))
+                        head += len(ansa.paras)
+                except IndexError:
+                    raise ValueError('run out of parameters at ansatz {}'.format(i))
         elif isinstance(ansatz_li,(list,tuple,np.ndarray)):
             for i in ansatz_li:
-                if isinstance(x_in[head],np.ndarray):
-                    self.ansatzes[i].para = np.array(x_in[head])
+                if isinstance(x_in[head],(list,tuple,np.ndarray)):
+                    self.ansatzes[i].update(np.array(x_in[head]))
                     head += 1
                 else:
-                    self.ansatzes[i].para = np.array(x_in[head:head+len(self.ansatzes[head].para)])
-                    head += len(self.ansatzes[head].para)
+                    self.ansatzes[i].update(np.array(x_in[head:head+len(self.ansatzes[i].paras)]))
+                    head += len(self.ansatzes[i].paras)
         else:
             raise TypeError("ansatz_li must be a list of indexes.")
-        self.__update_para()
-        self.propagators()
+        self.__updated = False
+    
+    # FIXME: Override the add_circuit function in QubitCircuit
+    def __permute_circuit(self, qc2add:QubitCircuit, pos=None) -> QubitCircuit:
+        """
+        Adds a block of a qubit circuit to the main circuit.
+        Globalphase gates are not added.
+
+        Parameters
+        ----------
+        qc2add : QubitCircuit
+            The circuit block to be added to the main circuit.
+        pos : list
+            The arrangement of qubits.
+        """
+        if pos is None:        # For default positions, add the circuit directly
+            return qc2add
+        
+        if max(pos) >= self.N or min(pos) < 0:
+            raise IndexError("Qubit allocated outside the circuit")
+            
+        temp_qc = QubitCircuit(self.N)
+
+        for op in qc2add.gates:
+            if op.targets is not None:
+                temp_tar = [pos[target] for target in op.targets]
+            else:
+                temp_tar = None
+
+            if isinstance(op, Gate):
+                if op.controls is not None:
+                    temp_ctrl = [pos[control] for control in op.controls]
+                else:
+                    temp_ctrl = None
+                temp_qc.add_gate(op.name, temp_tar, temp_ctrl,
+                                 op.arg_value,op.arg_label)
+            elif isinstance(op, Measurement):
+                self.add_measurement(
+                    op.name, temp_tar,
+                    classical_store=op.classical_store)
+            else:
+                raise TypeError("The circuit to be added contains unknown \
+                    operator {}".format(op))
+        return temp_qc

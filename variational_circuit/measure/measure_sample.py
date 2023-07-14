@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..bitfunc import inner
+from .measure_sim import com_measure
 
 from qutip import Qobj, state_index_number, state_number_index
 from qutip.qip.operations.gates import gate_sequence_product
@@ -22,20 +22,6 @@ def bell_prep(N,post_proc = False):
     return qc
 
 ############ Measurements ##################
-
-def com_measure(state):
-    """
-    Measurement in computational basis
-    """
-    if not isinstance(state,Qobj):
-        raise TypeError("Input must be a Qobj")
-    if state.type == "ket" or state.type == "bra":
-        prob = np.abs(state.full().flatten())**2
-    elif state.type == "oper":
-        prob = np.abs(state.diag())
-    else:
-        raise ValueError("Invalid input state.")
-    return prob
 
 def dst_measurement(state1,state2,sample_size=1):
     """destructive swap test"""
@@ -91,12 +77,12 @@ def dst_postps(samples,parti=None):
 
 ############ Test Function ##################
 
-def dst(state1: Qobj,state2: Qobj,parti: "list of partitions" =None,sample_size=1):
+def dst(state1: Qobj,state2: Qobj,parti=None,sample_size=1):
     sample = dst_measurement(state1,state2,sample_size)
     purity = dst_postps(sample,parti)
     return purity
 
-def dst_source(pre_ps: callable,parti: "list of partitions" =None,sample_size=1,args=()):
+def dst_source(pre_ps: callable,parti=None,sample_size=1,args=()):
     sample = []
     for _ in range(sample_size):
         state1 = pre_ps(args)
